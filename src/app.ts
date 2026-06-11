@@ -184,6 +184,7 @@ app.view("grant_modal", async ({ ack, body, view, logger }) => {
           elements: [
             {
               type: "button",
+              style: "primary",
               text: { type: "plain_text", text: "📋 View audit", emoji: true },
               action_id: "view_audit",
               value: result.runId,
