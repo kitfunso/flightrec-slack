@@ -146,8 +146,8 @@ app.view("grant_modal", async ({ ack, body, view, logger }) => {
 
     const granted = result.outcome === "grant";
     const attest = report.intact
-      ? `:lock: audit verified OK · ${report.events} events`
-      : `:rotating_light: audit BROKEN · first break seq ${report.firstBroken ?? "?"}`;
+      ? `🔒 audit verified OK · ${report.events} events`
+      : `🚨 audit BROKEN · first break seq ${report.firstBroken ?? "?"}`;
 
     // Deliver via the command's response_url, which posts to the invoking
     // channel WITHOUT requiring the bot to be a member (chat.postMessage would
@@ -160,7 +160,7 @@ app.view("grant_modal", async ({ ack, body, view, logger }) => {
           type: "header",
           text: {
             type: "plain_text",
-            text: granted ? ":white_check_mark: Access granted" : ":no_entry: Access denied",
+            text: granted ? "✅ Access granted" : "⛔ Access denied",
             emoji: true,
           },
         },
@@ -179,13 +179,24 @@ app.view("grant_modal", async ({ ack, body, view, logger }) => {
           type: "section",
           text: { type: "mrkdwn", text: `*Policy gate* — ${result.reason}` },
         },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: { type: "plain_text", text: "📋 View audit", emoji: true },
+              action_id: "view_audit",
+              value: result.runId,
+            },
+          ],
+        },
         { type: "divider" },
         {
           type: "context",
           elements: [
             {
               type: "mrkdwn",
-              text: `${attest}  ·  run \`${result.runId}\`  ·  full report: \`/audit ${result.runId}\``,
+              text: `${attest}  ·  run \`${result.runId}\``,
             },
           ],
         },
@@ -228,8 +239,8 @@ app.command("/audit", async ({ ack, command, respond, logger }) => {
       }
       const t = simulateTamper(config.dbPath, runId);
       prefix = t.tampered
-        ? `:warning: *Simulated out-of-band tamper applied* (${t.detail}). The black box should now flag it.\n\n`
-        : `:warning: tamper not applied: ${t.detail}\n\n`;
+        ? `⚠️ *Simulated out-of-band tamper applied* (${t.detail}). The black box should now flag it.\n\n`
+        : `⚠️ tamper not applied: ${t.detail}\n\n`;
     }
 
     const report = audit.forRun(runId).audit();
@@ -240,7 +251,7 @@ app.command("/audit", async ({ ack, command, respond, logger }) => {
       prefix +
       (report.intact
         ? "Every recorded step is hash-linked and independently verifiable."
-        : ":rotating_light: The recorded history was altered out-of-band; the hash chain no longer verifies — the black box caught it.");
+        : "🚨 The recorded history was altered out-of-band; the hash chain no longer verifies — the black box caught it.");
     const body =
       report.markdown.length > 2600 ? `${report.markdown.slice(0, 2600)}\n... (truncated)` : report.markdown;
 
@@ -253,7 +264,7 @@ app.command("/audit", async ({ ack, command, respond, logger }) => {
           type: "header",
           text: {
             type: "plain_text",
-            text: report.intact ? ":lock: AUDIT VERIFIED" : ":rotating_light: INTEGRITY VIOLATION",
+            text: report.intact ? "🔒 AUDIT VERIFIED" : "🚨 INTEGRITY VIOLATION",
             emoji: true,
           },
         },
@@ -274,6 +285,51 @@ app.command("/audit", async ({ ack, command, respond, logger }) => {
   } catch (error) {
     logger.error(error);
     await respond(`No audit found for \`${runId}\`.`);
+  }
+});
+
+// "View audit" button on a grant card -> post that run's audit, no copy-paste.
+app.action("view_audit", async ({ ack, respond, action, logger }) => {
+  await ack();
+  const runId = (action as { value?: string }).value ?? "";
+  try {
+    const report = audit.forRun(runId).audit();
+    const verdict = report.intact ? "chain intact" : `*BROKEN* — tamper at seq ${report.firstBroken ?? "?"}`;
+    const statusLine = report.intact
+      ? "Every recorded step is hash-linked and independently verifiable."
+      : "🚨 The recorded history was altered out-of-band; the hash chain no longer verifies — the black box caught it.";
+    const reportBody =
+      report.markdown.length > 2600 ? `${report.markdown.slice(0, 2600)}\n... (truncated)` : report.markdown;
+    await respond({
+      replace_original: false,
+      response_type: "in_channel",
+      text: `Audit for ${runId}`,
+      blocks: [
+        {
+          type: "header",
+          text: {
+            type: "plain_text",
+            text: report.intact ? "🔒 AUDIT VERIFIED" : "🚨 INTEGRITY VIOLATION",
+            emoji: true,
+          },
+        },
+        {
+          type: "section",
+          fields: [
+            { type: "mrkdwn", text: `*Run*\n\`${runId}\`` },
+            { type: "mrkdwn", text: `*Verdict*\n${verdict}` },
+            { type: "mrkdwn", text: `*Events*\n${report.events}` },
+            { type: "mrkdwn", text: `*Head hash*\n\`${report.headHash.slice(0, 16)}...\`` },
+          ],
+        },
+        { type: "section", text: { type: "mrkdwn", text: statusLine } },
+        { type: "divider" },
+        { type: "section", text: { type: "mrkdwn", text: "```" + reportBody + "```" } },
+      ],
+    });
+  } catch (error) {
+    logger.error(error);
+    await respond({ replace_original: false, text: `No audit found for \`${runId}\`.` });
   }
 });
 
