@@ -67,7 +67,7 @@ app.command("/grant", async ({ ack, body, client, logger }) => {
       view: {
         type: "modal",
         callback_id: "grant_modal",
-        private_metadata: JSON.stringify({ channel: body.channel_id }),
+        private_metadata: JSON.stringify({ channel: body.channel_id, responseUrl: body.response_url }),
         title: { type: "plain_text", text: "Request access" },
         submit: { type: "plain_text", text: "Request" },
         close: { type: "plain_text", text: "Cancel" },
@@ -119,11 +119,12 @@ app.command("/grant", async ({ ack, body, client, logger }) => {
   }
 });
 
-app.view("grant_modal", async ({ ack, body, view, client, logger }) => {
+app.view("grant_modal", async ({ ack, body, view, logger }) => {
   await ack();
   try {
     const meta = JSON.parse(view.private_metadata.length > 0 ? view.private_metadata : "{}") as {
       channel?: string;
+      responseUrl?: string;
     };
     const channel = meta.channel ?? "";
     const values = view.state.values as StateValues;
@@ -148,60 +149,71 @@ app.view("grant_modal", async ({ ack, body, view, client, logger }) => {
       ? `:lock: audit verified OK (${report.events} events)`
       : `:rotating_light: audit BROKEN (first break seq ${report.firstBroken ?? "?"})`;
 
-    if (channel.length > 0) {
-      await client.chat.postMessage({
-        channel,
-        text: `${headline}: ${result.reason}`,
-        blocks: [
-          {
-            type: "section",
-            text: {
+    // Deliver via the command's response_url, which posts to the invoking
+    // channel WITHOUT requiring the bot to be a member (chat.postMessage would
+    // fail with not_in_channel). response_type "in_channel" makes it visible.
+    const message = {
+      response_type: "in_channel",
+      text: `${headline}: ${result.reason}`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text:
+              `${headline}\n` +
+              `*Requester:* <@${req.requester}>  *Target:* <@${req.targetUser}>\n` +
+              `*Resource:* \`${req.resource}\`  *Scope:* \`${req.scope}\`  *Duration:* ${req.durationSeconds}s\n` +
+              `*Gate:* ${result.reason}\n` +
+              `*LLM proposed:* ${result.llmProposed} _(advisory; the gate decided)_\n` +
+              `${attest}`,
+          },
+        },
+        {
+          type: "context",
+          elements: [
+            {
               type: "mrkdwn",
-              text:
-                `${headline}\n` +
-                `*Requester:* <@${req.requester}>  *Target:* <@${req.targetUser}>\n` +
-                `*Resource:* \`${req.resource}\`  *Scope:* \`${req.scope}\`  *Duration:* ${req.durationSeconds}s\n` +
-                `*Gate:* ${result.reason}\n` +
-                `*LLM proposed:* ${result.llmProposed} _(advisory; the gate decided)_\n` +
-                `${attest}`,
+              text: `run \`${result.runId}\`  •  full report: \`/audit ${result.runId}\``,
             },
-          },
-          {
-            type: "context",
-            elements: [
-              {
-                type: "mrkdwn",
-                text: `run \`${result.runId}\`  •  requester id \`${req.requester}\`  •  full report: \`/audit ${result.runId}\``,
-              },
-            ],
-          },
-        ],
+          ],
+        },
+      ],
+    };
+    if (meta.responseUrl !== undefined && meta.responseUrl.length > 0) {
+      await fetch(meta.responseUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(message),
       });
+    } else {
+      logger.error("no response_url in modal metadata; cannot deliver result");
     }
   } catch (error) {
     logger.error(error);
   }
 });
 
-app.command("/audit", async ({ ack, command, client, logger }) => {
+app.command("/audit", async ({ ack, command, respond, logger }) => {
   await ack();
   const runId = command.text.trim();
   if (runId.length === 0) {
-    await client.chat.postMessage({ channel: command.channel_id, text: "Usage: `/audit <runId>`" });
+    await respond("Usage: `/audit <runId>`");
     return;
   }
   try {
     const report = audit.forRun(runId).audit();
     const body =
       report.markdown.length > 2800 ? `${report.markdown.slice(0, 2800)}\n... (truncated)` : report.markdown;
-    await client.chat.postMessage({
-      channel: command.channel_id,
+    // respond() uses the command's response_url — no channel membership needed.
+    await respond({
+      response_type: "in_channel",
       text: `Audit for ${runId}`,
       blocks: [{ type: "section", text: { type: "mrkdwn", text: "```" + body + "```" } }],
     });
   } catch (error) {
     logger.error(error);
-    await client.chat.postMessage({ channel: command.channel_id, text: `No audit found for \`${runId}\`.` });
+    await respond(`No audit found for \`${runId}\`.`);
   }
 });
 
