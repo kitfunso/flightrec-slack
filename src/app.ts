@@ -144,38 +144,48 @@ app.view("grant_modal", async ({ ack, body, view, logger }) => {
     const result = await broker.handle(req);
     const report = audit.forRun(result.runId).audit();
 
-    const headline =
-      result.outcome === "grant" ? ":white_check_mark: Access granted" : ":no_entry: Access denied";
+    const granted = result.outcome === "grant";
     const attest = report.intact
-      ? `:lock: audit verified OK (${report.events} events)`
-      : `:rotating_light: audit BROKEN (first break seq ${report.firstBroken ?? "?"})`;
+      ? `:lock: audit verified OK · ${report.events} events`
+      : `:rotating_light: audit BROKEN · first break seq ${report.firstBroken ?? "?"}`;
 
     // Deliver via the command's response_url, which posts to the invoking
     // channel WITHOUT requiring the bot to be a member (chat.postMessage would
     // fail with not_in_channel). response_type "in_channel" makes it visible.
     const message = {
       response_type: "in_channel",
-      text: `${headline}: ${result.reason}`,
+      text: `${granted ? "Access granted" : "Access denied"}: ${result.reason}`,
       blocks: [
         {
-          type: "section",
+          type: "header",
           text: {
-            type: "mrkdwn",
-            text:
-              `${headline}\n` +
-              `*Requester:* <@${req.requester}>  *Target:* <@${req.targetUser}>\n` +
-              `*Resource:* \`${req.resource}\`  *Scope:* \`${req.scope}\`  *Duration:* ${req.durationSeconds}s\n` +
-              `*Gate:* ${result.reason}\n` +
-              `*LLM proposed:* ${result.llmProposed} _(advisory; the gate decided)_\n` +
-              `${attest}`,
+            type: "plain_text",
+            text: granted ? ":white_check_mark: Access granted" : ":no_entry: Access denied",
+            emoji: true,
           },
         },
+        {
+          type: "section",
+          fields: [
+            { type: "mrkdwn", text: `*Requester*\n<@${req.requester}>` },
+            { type: "mrkdwn", text: `*Target*\n<@${req.targetUser}>` },
+            { type: "mrkdwn", text: `*Resource*\n\`${req.resource}\`` },
+            { type: "mrkdwn", text: `*Scope*\n\`${req.scope}\`` },
+            { type: "mrkdwn", text: `*Duration*\n${req.durationSeconds}s` },
+            { type: "mrkdwn", text: `*LLM proposed*\n${result.llmProposed} _(advisory)_` },
+          ],
+        },
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: `*Policy gate* — ${result.reason}` },
+        },
+        { type: "divider" },
         {
           type: "context",
           elements: [
             {
               type: "mrkdwn",
-              text: `run \`${result.runId}\`  •  full report: \`/audit ${result.runId}\``,
+              text: `${attest}  ·  run \`${result.runId}\`  ·  full report: \`/audit ${result.runId}\``,
             },
           ],
         },
@@ -223,9 +233,14 @@ app.command("/audit", async ({ ack, command, respond, logger }) => {
     }
 
     const report = audit.forRun(runId).audit();
-    const facts = report.intact
-      ? `*Run:* \`${runId}\`\n*Verdict:* chain intact - ${report.events} events, all hash-linked\n*Head:* \`${report.headHash.slice(0, 16)}...\``
-      : `*Run:* \`${runId}\`\n*Verdict:* *BROKEN* - tamper detected at seq ${report.firstBroken ?? "?"}\n_The recorded history was altered out-of-band; the hash chain no longer verifies._`;
+    const verdict = report.intact
+      ? "chain intact"
+      : `*BROKEN* — tamper at seq ${report.firstBroken ?? "?"}`;
+    const statusLine =
+      prefix +
+      (report.intact
+        ? "Every recorded step is hash-linked and independently verifiable."
+        : ":rotating_light: The recorded history was altered out-of-band; the hash chain no longer verifies — the black box caught it.");
     const body =
       report.markdown.length > 2600 ? `${report.markdown.slice(0, 2600)}\n... (truncated)` : report.markdown;
 
@@ -242,7 +257,16 @@ app.command("/audit", async ({ ack, command, respond, logger }) => {
             emoji: true,
           },
         },
-        { type: "section", text: { type: "mrkdwn", text: prefix + facts } },
+        {
+          type: "section",
+          fields: [
+            { type: "mrkdwn", text: `*Run*\n\`${runId}\`` },
+            { type: "mrkdwn", text: `*Verdict*\n${verdict}` },
+            { type: "mrkdwn", text: `*Events*\n${report.events}` },
+            { type: "mrkdwn", text: `*Head hash*\n\`${report.headHash.slice(0, 16)}...\`` },
+          ],
+        },
+        { type: "section", text: { type: "mrkdwn", text: statusLine } },
         { type: "divider" },
         { type: "section", text: { type: "mrkdwn", text: "```" + body + "```" } },
       ],
