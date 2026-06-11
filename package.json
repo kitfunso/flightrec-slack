@@ -1,0 +1,26 @@
+{
+  "name": "flightrec-slack",
+  "version": "0.1.0",
+  "description": "Privileged-action broker for Slack with a tamper-evident flightrec audit trail",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "author": "Keith So",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "flightrec": "file:../flightrec"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
