@@ -35,3 +35,18 @@ Technological Implementation, Potential Impact, Design — and open on the wow
 - Keep it UNDER 3:00 — cut the optional MCP beat before you cut the tamper beat.
 - The tamper flip (2:10) is the single most important shot. Rehearse it; let it land.
 - Record in segments and stitch; don't fight a single take.
+
+## Recording order (clean, no-id commands — use THIS)
+
+`/audit` and `/audit tamper` default to the LATEST run, so no run-id pasting on
+camera. Record linearly in this order — the tamper hits the grant because the
+grant is the most-recent run at that point:
+
+1. `/grant` → target = you, resource `prod-analytics`, scope **admin**, 1 hour → Request → ⛔ DENIED (gate refuses the over-reach; the LLM still leaned grant).
+2. `/grant` → resource `prod-analytics`, scope **read**, 1 hour → Request → ✅ GRANTED.
+3. Click the green **View audit** button → 🔒 AUDIT VERIFIED.
+4. Type `/audit tamper` (no id) → 🚨 INTEGRITY VIOLATION — the same run flips. The money shot.
+5. (Optional) Claude Desktop records a run → `/audit` in Slack shows it.
+
+Cold-open tip: record linearly, then in editing lift the step-4 flip to the
+front as a ~5s teaser and cut back to the start.
