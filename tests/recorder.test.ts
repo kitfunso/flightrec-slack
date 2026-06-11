@@ -39,6 +39,8 @@ function recordGrantRun(dbPath: string, runId: string): void {
   rec.recordLlmCall({
     model: "claude-opus-4-8",
     purpose: "evaluate access request",
+    proposedOutcome: "grant",
+    rationale: "requester is a known admin on this resource",
     inputTokens: 1200,
     outputTokens: 180,
   });
@@ -47,15 +49,17 @@ function recordGrantRun(dbPath: string, runId: string): void {
     gateVerdict: "allow",
     reason: "requester U_ADMIN is entitled to grant read on prod-analytics",
   });
-  rec.recordAction({
-    action: "grant",
-    targetUser: "U_JANE",
-    resource: "prod-analytics",
-    scope: "read",
-    executed: true,
-    result: "granted 24h read on prod-analytics",
+  rec.recordToolCallPre({
+    toolName: "access.grant",
+    toolUseId: "tu-1",
+    input: { targetUser: "U_JANE", resource: "prod-analytics", scope: "read" },
   });
-  rec.recordCost({ model: "claude-opus-4-8", inputTokens: 1200, outputTokens: 180 });
+  rec.recordToolCallPost({
+    toolName: "access.grant",
+    toolUseId: "tu-1",
+    output: { executed: true, result: "granted 24h read on prod-analytics" },
+  });
+  rec.recordCost({ messageId: "m-1", model: "claude-opus-4-8", inputTokens: 1200, outputTokens: 180 });
   rec.close();
   store.close();
 }
@@ -77,7 +81,7 @@ describe("Recorder", () => {
 
     const v = rec.verify();
     expect(v.ok).toBe(true);
-    expect(v.events).toBe(5); // run_meta, llm_call, decision, tool_call, cost
+    expect(v.events).toBe(6); // run_meta, llm_call, decision, tool_call(pre), tool_call(post), cost
 
     const audit = rec.audit();
     expect(audit.intact).toBe(true);

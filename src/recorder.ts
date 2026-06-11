@@ -62,12 +62,15 @@ export interface RequestMeta {
   readonly durationSeconds: number;
 }
 
-/** An LLM turn — recorded as an `llm_call` event. */
+/** An LLM turn — recorded as an `llm_call` event. Carries the model's advisory
+ *  output so the audit reconstructs what the AI reasoned, not just its cost. */
 export interface LlmCall {
   readonly model: string;
   readonly purpose: string;
-  readonly inputTokens?: number;
-  readonly outputTokens?: number;
+  readonly proposedOutcome: "grant" | "deny";
+  readonly rationale: string;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
 }
 
 /** The agent's grant/deny choice plus the deterministic gate's verdict. */
@@ -78,19 +81,25 @@ export interface Decision {
   readonly reason: string;
 }
 
-/** A privileged action attempt; the RESULT is carried in this same event. */
-export interface Action {
-  readonly action: string;
-  readonly targetUser: string;
-  readonly resource: string;
-  readonly scope: string;
-  /** False when the gate denied the action (a denial is still recorded). */
-  readonly executed: boolean;
-  readonly result: string;
+/** A tool invocation, recorded as a `tool_call` event with `phase: "pre"`.
+ *  flightrec pairs it with the matching post by `toolUseId` for the inventory. */
+export interface ToolCallPre {
+  readonly toolName: string;
+  readonly toolUseId: string;
+  readonly input: unknown;
 }
 
-/** Token/cost accounting for the run. */
+/** A tool result, recorded as a `tool_call` event with `phase: "post"`. */
+export interface ToolCallPost {
+  readonly toolName: string;
+  readonly toolUseId: string;
+  readonly output: unknown;
+}
+
+/** Token/cost accounting for the run. `messageId` is the dedup key flightrec
+ *  uses to avoid double-counting; it must be unique per cost event. */
 export interface Cost {
+  readonly messageId: string;
   readonly model: string;
   readonly inputTokens: number;
   readonly outputTokens: number;
@@ -141,14 +150,39 @@ export class Recorder {
     this.append("decision", decision);
   }
 
-  /** The privileged action (executed or denied); result carried in payload. */
-  recordAction(action: Action): void {
-    this.append("tool_call", action);
+  /** A tool invocation (`tool_call` phase "pre"), with the flightrec-expected
+   *  `tool_name` + `tool_use_id` so the audit's tool inventory pairs it. */
+  recordToolCallPre(pre: ToolCallPre): void {
+    this.append("tool_call", {
+      phase: "pre",
+      tool_name: pre.toolName,
+      tool_use_id: pre.toolUseId,
+      input: pre.input,
+    });
   }
 
-  /** Token spend for the run. */
+  /** A tool result (`tool_call` phase "post"), paired by `tool_use_id`. */
+  recordToolCallPost(post: ToolCallPost): void {
+    this.append("tool_call", {
+      phase: "post",
+      tool_name: post.toolName,
+      tool_use_id: post.toolUseId,
+      output: post.output,
+    });
+  }
+
+  /** Token spend, in flightrec's expected `cost` shape (messageId + usage). */
   recordCost(cost: Cost): void {
-    this.append("cost", cost);
+    this.append("cost", {
+      messageId: cost.messageId,
+      model: cost.model,
+      usage: {
+        input_tokens: cost.inputTokens,
+        output_tokens: cost.outputTokens,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      },
+    });
   }
 
   /** Mark the run closed (a separate flightrec call, not an event kind). */

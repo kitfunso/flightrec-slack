@@ -65,6 +65,8 @@ export class Broker {
     rec.recordLlmCall({
       model: reasoned.model,
       purpose: "reason about access request",
+      proposedOutcome: reasoned.proposedOutcome,
+      rationale: reasoned.rationale,
       inputTokens: reasoned.inputTokens,
       outputTokens: reasoned.outputTokens,
     });
@@ -78,31 +80,37 @@ export class Broker {
       reason: verdict.reason,
     });
 
+    // Only an allowed action invokes the access tool, recorded as a pre/post
+    // pair. A denial is fully captured by the decision event above; recording
+    // no tool_call keeps the audit honest (the inventory shows only what ran).
     let grant: GrantRecord | undefined;
     if (verdict.verdict === "allow") {
-      grant = this.access.grant(req.targetUser, req.resource, req.scope, req.durationSeconds, nowMs);
-      rec.recordAction({
-        action: "grant",
-        targetUser: req.targetUser,
-        resource: req.resource,
-        scope: req.scope,
-        executed: true,
-        result:
-          `granted '${req.scope}' on '${req.resource}' to ${req.targetUser} ` +
-          `(grant ${grant.id}, expires ${new Date(grant.expiresAtMs).toISOString()})`,
+      const toolUseId = `${runId}#access1`;
+      rec.recordToolCallPre({
+        toolName: "access.grant",
+        toolUseId,
+        input: {
+          targetUser: req.targetUser,
+          resource: req.resource,
+          scope: req.scope,
+          durationSeconds: req.durationSeconds,
+        },
       });
-    } else {
-      rec.recordAction({
-        action: "grant",
-        targetUser: req.targetUser,
-        resource: req.resource,
-        scope: req.scope,
-        executed: false,
-        result: `denied by policy gate: ${verdict.reason}`,
+      grant = this.access.grant(req.targetUser, req.resource, req.scope, req.durationSeconds, nowMs);
+      rec.recordToolCallPost({
+        toolName: "access.grant",
+        toolUseId,
+        output: {
+          executed: true,
+          grantId: grant.id,
+          expiresAt: new Date(grant.expiresAtMs).toISOString(),
+          result: `granted '${req.scope}' on '${req.resource}' to ${req.targetUser}`,
+        },
       });
     }
 
     rec.recordCost({
+      messageId: `${runId}#llm1`,
       model: reasoned.model,
       inputTokens: reasoned.inputTokens,
       outputTokens: reasoned.outputTokens,

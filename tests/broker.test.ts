@@ -61,7 +61,7 @@ describe("Broker", () => {
 
     const audit = store.forRun(result.runId).audit();
     expect(audit.intact).toBe(true);
-    expect(audit.events).toBe(5); // run_meta, llm_call, decision, tool_call, cost
+    expect(audit.events).toBe(6); // run_meta, llm_call, decision, tool_call(pre+post), cost
     expect(audit.markdown).toContain("verdict: OK");
     store.close();
   });
@@ -78,11 +78,11 @@ describe("Broker", () => {
     expect(result.grant).toBeUndefined();
     expect(result.reason).toContain("may not grant scope 'admin'");
 
-    // The denial is still recorded, and the run still verifies intact.
+    // The denial is still recorded (no tool ran), and the run verifies intact.
     const audit = store.forRun(result.runId).audit();
     expect(audit.intact).toBe(true);
-    expect(audit.events).toBe(5);
-    expect(audit.markdown).toContain("denied by policy gate");
+    expect(audit.events).toBe(4); // run_meta, llm_call, decision, cost (no tool_call)
+    expect(audit.markdown).toContain("may not grant scope 'admin'");
     store.close();
   });
 
