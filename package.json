@@ -13,9 +13,13 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "start": "npm run build && node --env-file=.env dist/app.js",
+    "check:creds": "node --env-file=.env scripts/smoke_creds.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
+    "@slack/bolt": "^4.7.3",
     "flightrec": "file:../flightrec"
   },
   "devDependencies": {

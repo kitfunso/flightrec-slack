@@ -6,4 +6,6 @@ dist/
 .env
 .env.*
 !.env.example
+entitlements.json
+data/
 *.log

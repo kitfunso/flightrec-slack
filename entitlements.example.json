@@ -1,0 +1,14 @@
+[
+  {
+    "grantor": "U_REPLACE_WITH_YOUR_SLACK_USER_ID",
+    "resource": "prod-analytics",
+    "allowedScopes": ["read", "write"],
+    "maxDurationSeconds": 86400
+  },
+  {
+    "grantor": "U_REPLACE_WITH_YOUR_SLACK_USER_ID",
+    "resource": "staging-db",
+    "allowedScopes": ["read"],
+    "maxDurationSeconds": 3600
+  }
+]
