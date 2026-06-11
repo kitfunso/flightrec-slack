@@ -17,6 +17,7 @@ import { MockAccessSystem } from "./access_system.js";
 import { ClaudeReasoner } from "./claude_reasoner.js";
 import { StubReasoner, type Reasoner } from "./reasoner.js";
 import { Broker } from "./broker.js";
+import { simulateTamper } from "./tamper.js";
 import type { GrantRequest } from "./entitlements.js";
 
 const { App } = boltPkg;
@@ -196,20 +197,55 @@ app.view("grant_modal", async ({ ack, body, view, logger }) => {
 
 app.command("/audit", async ({ ack, command, respond, logger }) => {
   await ack();
-  const runId = command.text.trim();
+  const parts = command.text.trim().split(/\s+/).filter((p) => p.length > 0);
+  const isTamper = parts[0] === "tamper";
+  const runId = (isTamper ? parts[1] : parts[0]) ?? "";
+
   if (runId.length === 0) {
-    await respond("Usage: `/audit <runId>`");
+    await respond(
+      "Usage: `/audit <runId>`" +
+        (config.demoMode ? "   (demo: `/audit tamper <runId>` to simulate an attack)" : ""),
+    );
     return;
   }
+
   try {
+    let prefix = "";
+    if (isTamper) {
+      if (!config.demoMode) {
+        await respond("Tamper simulation is disabled (set `FLIGHTREC_DEMO=1`).");
+        return;
+      }
+      const t = simulateTamper(config.dbPath, runId);
+      prefix = t.tampered
+        ? `:warning: *Simulated out-of-band tamper applied* (${t.detail}). The black box should now flag it.\n\n`
+        : `:warning: tamper not applied: ${t.detail}\n\n`;
+    }
+
     const report = audit.forRun(runId).audit();
+    const facts = report.intact
+      ? `*Run:* \`${runId}\`\n*Verdict:* chain intact - ${report.events} events, all hash-linked\n*Head:* \`${report.headHash.slice(0, 16)}...\``
+      : `*Run:* \`${runId}\`\n*Verdict:* *BROKEN* - tamper detected at seq ${report.firstBroken ?? "?"}\n_The recorded history was altered out-of-band; the hash chain no longer verifies._`;
     const body =
-      report.markdown.length > 2800 ? `${report.markdown.slice(0, 2800)}\n... (truncated)` : report.markdown;
-    // respond() uses the command's response_url — no channel membership needed.
+      report.markdown.length > 2600 ? `${report.markdown.slice(0, 2600)}\n... (truncated)` : report.markdown;
+
+    // respond() uses the command's response_url - no channel membership needed.
     await respond({
       response_type: "in_channel",
       text: `Audit for ${runId}`,
-      blocks: [{ type: "section", text: { type: "mrkdwn", text: "```" + body + "```" } }],
+      blocks: [
+        {
+          type: "header",
+          text: {
+            type: "plain_text",
+            text: report.intact ? ":lock: AUDIT VERIFIED" : ":rotating_light: INTEGRITY VIOLATION",
+            emoji: true,
+          },
+        },
+        { type: "section", text: { type: "mrkdwn", text: prefix + facts } },
+        { type: "divider" },
+        { type: "section", text: { type: "mrkdwn", text: "```" + body + "```" } },
+      ],
     });
   } catch (error) {
     logger.error(error);

@@ -113,6 +113,8 @@ export interface AuditArtifact {
   /** 1-based seq of the first broken event when not intact (drives the FAIL card). */
   readonly firstBroken?: number;
   readonly events: number;
+  /** Head hash recomputed from the events (not the stored head). */
+  readonly headHash: string;
 }
 
 /**
@@ -214,6 +216,7 @@ export class Recorder {
       intact: v.ok,
       firstBroken: v.firstBroken,
       events: v.events,
+      headHash: v.headHash,
     };
   }
 }

@@ -13,6 +13,8 @@ export interface AppConfig {
   readonly model: string;
   readonly dbPath: string;
   readonly entitlements: EntitlementStore;
+  /** When true, the demo-only `/audit tamper <runId>` command is enabled. */
+  readonly demoMode: boolean;
 }
 
 function requireEnv(name: string): string {
@@ -43,5 +45,6 @@ export function loadConfig(): AppConfig {
     model: process.env.FLIGHTREC_SLACK_MODEL ?? "claude-haiku-4-5-20251001",
     dbPath: process.env.FLIGHTREC_SLACK_DB ?? "data/audit.db",
     entitlements: loadEntitlements(process.env.FLIGHTREC_SLACK_ENTITLEMENTS ?? "entitlements.json"),
+    demoMode: process.env.FLIGHTREC_DEMO === "1",
   };
 }
