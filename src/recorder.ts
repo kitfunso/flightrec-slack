@@ -25,6 +25,7 @@ import {
   closeRun,
   buildRunModel,
   renderAuditMarkdown,
+  listRuns,
 } from "flightrec";
 import type { VerifyResult } from "flightrec";
 import type { DatabaseSync } from "node:sqlite";
@@ -232,6 +233,12 @@ export class AuditStore {
   /** A recorder bound to one run id, sharing this store's database handle. */
   forRun(runId: string): Recorder {
     return new Recorder(this.db, runId);
+  }
+
+  /** The most recently created run's id, or null if the store is empty. */
+  latestRunId(): string | null {
+    const [run] = listRuns(this.db, { limit: 1 });
+    return run !== undefined ? run.runId : null;
   }
 
   /** Close the underlying database handle (releases the file lock). */

@@ -221,14 +221,17 @@ app.command("/audit", async ({ ack, command, respond, logger }) => {
   await ack();
   const parts = command.text.trim().split(/\s+/).filter((p) => p.length > 0);
   const isTamper = parts[0] === "tamper";
-  const runId = (isTamper ? parts[1] : parts[0]) ?? "";
+  let runId = (isTamper ? parts[1] : parts[0]) ?? "";
 
+  // No run id given -> default to the most recent run (clean for live demos:
+  // `/audit` audits the latest, `/audit tamper` tampers the latest).
   if (runId.length === 0) {
-    await respond(
-      "Usage: `/audit <runId>`" +
-        (config.demoMode ? "   (demo: `/audit tamper <runId>` to simulate an attack)" : ""),
-    );
-    return;
+    const latest = audit.latestRunId();
+    if (latest === null) {
+      await respond("No runs recorded yet — run `/grant` first.");
+      return;
+    }
+    runId = latest;
   }
 
   try {

@@ -140,4 +140,20 @@ describe("Recorder", () => {
 
     store.close();
   });
+
+  it("latestRunId returns the most recent run, or null when empty", () => {
+    const dbPath = freshDbPath();
+    const store = openAuditStore(dbPath);
+    expect(store.latestRunId()).toBeNull();
+    store.forRun("T.C.first").recordRequest({
+      requester: "U1", channel: "C1", threadTs: "1", action: "grant",
+      targetUser: "U2", resource: "r", scope: "read", durationSeconds: 60,
+    });
+    store.forRun("T.C.second").recordRequest({
+      requester: "U1", channel: "C1", threadTs: "2", action: "grant",
+      targetUser: "U2", resource: "r", scope: "read", durationSeconds: 60,
+    });
+    expect(store.latestRunId()).toBe("T.C.second");
+    store.close();
+  });
 });
