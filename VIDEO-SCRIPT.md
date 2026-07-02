@@ -1,4 +1,4 @@
-# flightrec-slack — demo video script (≤3 min, Organizations track)
+# flightrec-slack — demo video script (≤3 min, New Slack Agent track)
 
 Goal: in under 3 minutes, hit all four EQUAL judging criteria — Quality of Idea,
 Technological Implementation, Potential Impact, Design — and open on the wow
@@ -27,12 +27,14 @@ Technological Implementation, Potential Impact, Design — and open on the wow
 
 ## Criteria the judges are scoring (name them on screen as lower-thirds)
 - **Quality of Idea** — a tamper-evident black box for AI agents; doesn't exist as a Slack agent.
-- **Technological Implementation** — MCP server integration + SHA-256 hash chain + append-only SQLite + 22 real-DB tests.
+- **Technological Implementation** — MCP server integration (the track's qualifying technology) + SHA-256 hash chain + append-only SQLite + 26 real-DB tests.
 - **Potential Impact** — unlocks AI agents for regulated orgs; AI governance is the #1 enterprise-AI blocker.
 - **Design** — verdict-header cards, two-column field grids, one-click audit, the FAIL card.
 
 ## Notes
-- Keep it UNDER 3:00 — cut the optional MCP beat before you cut the tamper beat.
+- Keep it UNDER 3:00. The MCP beat (2:40) is the New-Agent track's qualifying
+  technology — if over time, tighten the 0:18-0:38 problem beat before cutting it.
+  The tamper flip is still untouchable.
 - The tamper flip (2:10) is the single most important shot. Rehearse it; let it land.
 - Record in segments and stitch; don't fight a single take.
 
