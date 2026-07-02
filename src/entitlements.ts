@@ -28,7 +28,10 @@ export interface GrantRequest {
 
 /** One grantor's authority to grant scopes on a resource, up to a max duration. */
 export interface Entitlement {
-  /** Slack user id of the grantor who holds this entitlement. */
+  /** Slack user id of the grantor who holds this entitlement, or `"*"` — an
+   * explicit policy statement that EVERY workspace member holds it (used for
+   * demo/sandbox resources). The gate still checks resource, scope, and
+   * duration parameter by parameter; `"*"` widens who, never what. */
   readonly grantor: string;
   readonly resource: string;
   readonly allowedScopes: readonly string[];
@@ -39,8 +42,8 @@ export interface Entitlement {
 export class EntitlementStore {
   constructor(private readonly entitlements: readonly Entitlement[]) {}
 
-  /** All entitlements held by one grantor. */
+  /** All entitlements held by one grantor, including `"*"` any-member entries. */
   forGrantor(grantor: string): readonly Entitlement[] {
-    return this.entitlements.filter((e) => e.grantor === grantor);
+    return this.entitlements.filter((e) => e.grantor === grantor || e.grantor === "*");
   }
 }

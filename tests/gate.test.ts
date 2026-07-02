@@ -65,3 +65,30 @@ describe("evaluateGate", () => {
     expect(v.verdict).toBe("deny");
   });
 });
+
+describe("evaluateGate with an any-member ('*') policy entry", () => {
+  const WILD = new EntitlementStore([
+    { grantor: "U_ADMIN", resource: "prod-analytics", allowedScopes: ["read", "write"], maxDurationSeconds: 86_400 },
+    { grantor: "*", resource: "demo-sandbox", allowedScopes: ["read"], maxDurationSeconds: 3_600 },
+  ]);
+
+  it("allows any member the exact entitlement the '*' policy grants", () => {
+    const v = evaluateGate(req({ requester: "U_NEW_JOINER", resource: "demo-sandbox" }), WILD);
+    expect(v.verdict).toBe("allow");
+  });
+
+  it("still gates parameter-level: '*' widens who, never scope", () => {
+    const v = evaluateGate(
+      req({ requester: "U_NEW_JOINER", resource: "demo-sandbox", scope: "admin" }),
+      WILD,
+    );
+    expect(v.verdict).toBe("deny");
+    expect(v.reason).toContain("may not grant scope 'admin'");
+  });
+
+  it("still gates parameter-level: '*' widens who, never resource", () => {
+    const v = evaluateGate(req({ requester: "U_NEW_JOINER", resource: "prod-analytics" }), WILD);
+    expect(v.verdict).toBe("deny");
+    expect(v.reason).toContain("cannot grant on resource");
+  });
+});

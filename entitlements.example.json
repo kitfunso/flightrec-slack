@@ -10,5 +10,11 @@
     "resource": "staging-db",
     "allowedScopes": ["read"],
     "maxDurationSeconds": 3600
+  },
+  {
+    "grantor": "*",
+    "resource": "demo-sandbox",
+    "allowedScopes": ["read"],
+    "maxDurationSeconds": 3600
   }
 ]
