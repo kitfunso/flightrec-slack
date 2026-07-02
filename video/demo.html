@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>flightrec demo reel</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1920px; height:1080px; overflow:hidden; background:#000;
+    font-family:"Segoe UI",Lato,Helvetica,Arial,sans-serif; }
+  .scene { position:absolute; inset:0; display:none; }
+  .scene.on { display:block; }
+
+  /* ---------- intro overlay + captions ---------- */
+  #intro { position:fixed; inset:0; background:#0b0d10; z-index:1000; display:flex;
+    flex-direction:column; align-items:center; justify-content:center; gap:28px;
+    transition:opacity .45s; }
+  #intro.hidden { opacity:0; pointer-events:none; }
+  #introBig { color:#f4f4f2; font-size:64px; font-weight:800; max-width:1500px;
+    text-align:center; line-height:1.25; }
+  #introBig em { color:#4ec9b0; font-style:normal; }
+  #introSub { color:#8b949e; font-size:26px; letter-spacing:3px; text-transform:uppercase; }
+  #cap { position:fixed; left:50%; bottom:54px; transform:translateX(-50%); z-index:900;
+    background:rgba(8,10,12,.92); border:1px solid #3a3f45; color:#eceff1;
+    font-size:26px; font-weight:600; padding:16px 34px; border-radius:12px;
+    max-width:1500px; text-align:center; opacity:0; transition:opacity .35s; }
+  #cap.on { opacity:1; }
+  #chip { position:fixed; top:28px; right:36px; z-index:900; background:rgba(8,10,12,.85);
+    border:1px solid #3a3f45; color:#9fb2c8; font-size:17px; font-weight:700;
+    letter-spacing:1.5px; text-transform:uppercase; padding:9px 18px; border-radius:999px;
+    opacity:0; transition:opacity .35s; }
+  #chip.on { opacity:1; }
+
+  /* ---------- dark cards (title/problem/close) ---------- */
+  .darkcard { width:100%; height:100%; background:#0b0d10; flex-direction:column;
+    align-items:center; justify-content:center; gap:30px; }
+  .scene.darkcard.on { display:flex; }
+  .wordmark { font-size:110px; font-weight:800; color:#f4f4f2; letter-spacing:-2px; }
+  .wordmark .lock { color:#4ec9b0; }
+  .tagline { font-size:34px; color:#8b949e; }
+  .urlline { font-size:28px; color:#4ec9b0; font-family:Consolas,monospace; }
+
+  /* ---------- Slack chrome ---------- */
+  .slack { width:100%; height:100%; display:grid; grid-template-columns:76px 300px 1fr;
+    background:#1a1d21; color:#d1d2d3; }
+  .rail { background:#121016; display:flex; flex-direction:column; align-items:center; padding-top:14px; gap:14px; }
+  .rail .ws { width:44px; height:44px; border-radius:10px; background:#4ec9b0; color:#08211c;
+    font-weight:800; font-size:20px; display:flex; align-items:center; justify-content:center; }
+  .rail .dot { width:38px; height:38px; border-radius:9px; background:#2b2530; }
+  .sidebar { background:#19171d; padding:18px 0; border-right:1px solid #2c2a30; }
+  .sidebar h1 { color:#fff; font-size:19px; padding:0 18px 14px; border-bottom:1px solid #2c2a30; }
+  .sidebar .sect { color:#9d9ba3; font-size:14px; padding:16px 18px 8px; letter-spacing:.5px; }
+  .sidebar .ch { color:#9d9ba3; font-size:16px; padding:6px 18px; }
+  .sidebar .ch.active { background:#1164a3; color:#fff; border-radius:0 6px 6px 0; margin-right:12px; }
+  .main { display:flex; flex-direction:column; min-width:0; }
+  .chanhead { padding:14px 24px; border-bottom:1px solid #2c2a30; color:#fff; font-weight:700; font-size:19px; }
+  .chanhead span { color:#9d9ba3; font-weight:400; font-size:15px; margin-left:14px; }
+  .msgs { flex:1; overflow:hidden; padding:26px 34px; display:flex; flex-direction:column; gap:26px; justify-content:flex-end; }
+  .msgs.centered { justify-content:center; }
+  .inputbar { margin:0 34px 26px; border:1px solid #565856; border-radius:10px; padding:14px 18px;
+    color:#9d9ba3; font-size:16px; }
+  .inputbar .cmd { color:#1d9bd1; font-weight:600; }
+
+  /* ---------- messages + Block Kit cards ---------- */
+  .msg { display:flex; gap:14px; }
+  .avatar { width:44px; height:44px; border-radius:8px; flex:none; display:flex; align-items:center;
+    justify-content:center; font-size:24px; background:#0e3b32; }
+  .avatar.user { background:#35485e; }
+  .mbody { min-width:0; flex:1; }
+  .mhead { font-size:16px; }
+  .mhead b { color:#fff; font-size:16.5px; }
+  .mhead .app { background:#35373b; color:#b8bbc0; font-size:11px; font-weight:700; padding:2px 5px;
+    border-radius:3px; margin:0 8px; vertical-align:2px; }
+  .mhead .ts { color:#9d9ba3; font-size:13px; margin-left:8px; }
+  .mtext { font-size:17px; margin-top:3px; }
+  .card { margin-top:10px; max-width:1080px; }
+  .card .hdr { color:#fff; font-weight:800; font-size:24px; margin:6px 0 14px; }
+  .fields { display:grid; grid-template-columns:1fr 1fr; gap:12px 26px; max-width:760px; }
+  .f label { display:block; color:#fff; font-weight:700; font-size:16px; }
+  .f div { color:#d1d2d3; font-size:16.5px; margin-top:2px; }
+  .mention { background:rgba(29,155,209,.18); color:#1d9bd1; border-radius:4px; padding:1px 4px; }
+  code.ic { background:#222529; border:1px solid #3a3d42; color:#e8912d; border-radius:4px;
+    padding:1px 6px; font-family:Consolas,monospace; font-size:15px; }
+  .gateline { margin-top:16px; font-size:16.5px; color:#d1d2d3; max-width:900px; }
+  .gateline b { color:#fff; }
+  .btnrow { margin-top:16px; }
+  .grnbtn { display:inline-block; background:#007a5a; color:#fff; font-weight:700; font-size:16px;
+    padding:10px 18px; border-radius:6px; }
+  .divider { height:1px; background:#3a3d42; margin:18px 0 10px; max-width:1080px; }
+  .ctx { color:#9d9ba3; font-size:14px; font-family:Consolas,monospace; }
+  .auditpre { margin-top:14px; background:#222529; border:1px solid #3a3d42; border-radius:8px;
+    padding:18px 22px; font-family:Consolas,monospace; font-size:14.5px; line-height:1.5;
+    color:#d1d2d3; white-space:pre-wrap; max-width:1080px; height:470px; overflow:hidden; }
+  .auditpre .inner { transition:transform 6s linear; }
+  .verdict-ok { color:#2eb67d; } .verdict-bad { color:#e01e5a; }
+
+  /* ---------- modal ---------- */
+  .modalveil { position:absolute; inset:0; background:rgba(0,0,0,.55); display:flex;
+    align-items:center; justify-content:center; }
+  .modal { width:560px; background:#fff; border-radius:12px; color:#1d1c1d; padding:26px 28px; }
+  .modal h2 { font-size:24px; margin-bottom:20px; }
+  .modal .mf { margin-bottom:18px; }
+  .modal .mf label { display:block; font-weight:700; font-size:15px; margin-bottom:7px; }
+  .modal .mf .inp { border:1px solid #868686; border-radius:6px; padding:11px 13px; font-size:16px;
+    color:#1d1c1d; min-height:44px; }
+  .modal .mf .inp .ph { color:#868686; }
+  .modal .mbtns { display:flex; justify-content:flex-end; gap:12px; margin-top:24px; }
+  .modal .cancel { border:1px solid #bbb; border-radius:6px; padding:10px 18px; font-weight:700; }
+  .modal .submit { background:#007a5a; color:#fff; border-radius:6px; padding:10px 20px; font-weight:700; }
+  .modal .submit.pressed { background:#005a41; box-shadow:inset 0 0 0 2px #0b4; }
+  .typing::after { content:"|"; animation:blink .8s infinite; color:#1264a3; }
+  @keyframes blink { 50% { opacity:0; } }
+
+  /* ---------- terminal ---------- */
+  .termveil { position:absolute; inset:0; background:rgba(0,0,0,.62); display:flex;
+    align-items:center; justify-content:center; }
+  .term { width:1150px; background:#0c0c0e; border:1px solid #333; border-radius:10px;
+    box-shadow:0 30px 80px rgba(0,0,0,.6); overflow:hidden; }
+  .term .bar { background:#1b1b1f; padding:10px 16px; display:flex; gap:8px; align-items:center; }
+  .term .bar i { width:13px; height:13px; border-radius:50%; display:inline-block; }
+  .term .bar .r{background:#ff5f57}.term .bar .y{background:#febc2e}.term .bar .g{background:#28c840}
+  .term .bar span { color:#8b949e; font-size:14px; margin-left:12px; font-family:Consolas,monospace; }
+  .term pre { padding:22px 26px 30px; font-family:Consolas,monospace; font-size:18px; line-height:1.65;
+    color:#e6edf3; min-height:300px; white-space:pre-wrap; }
+  .term pre .p { color:#4ec9b0; } .term pre .warn { color:#ff7b72; }
+
+  /* ---------- Claude Desktop / MCP split ---------- */
+  .split { width:100%; height:100%; display:grid; grid-template-columns:1fr 1fr; }
+  .cd { background:#f0eee6; display:flex; flex-direction:column; }
+  .cd .bar { background:#e8e5da; padding:12px 20px; font-weight:700; color:#3d3929; font-size:16px;
+    display:flex; align-items:center; gap:10px; }
+  .cd .bar i { width:12px; height:12px; border-radius:50%; display:inline-block; }
+  .cd .body { flex:1; padding:34px 44px; display:flex; flex-direction:column; gap:22px; }
+  .cd .u { align-self:flex-end; background:#e1ddd0; color:#1d1c1d; padding:14px 20px; border-radius:14px;
+    max-width:560px; font-size:18px; }
+  .cd .a { color:#1d1c1d; font-size:18px; max-width:640px; line-height:1.5; }
+  .cd .tool { background:#fff; border:1px solid #d5d1c3; border-radius:10px; padding:12px 16px;
+    font-family:Consolas,monospace; font-size:15px; color:#5f5b4c; max-width:640px; }
+  .cd .tool b { color:#c15f3c; font-family:inherit; }
+  .slackhalf { border-left:2px solid #000; }
+  .slackhalf .slack { display:flex; }
+  .slackhalf .main { flex:1; }
+</style>
+</head>
+<body>
+
+<div id="intro"><div id="introBig"></div><div id="introSub"></div></div>
+<div id="cap"></div>
+<div id="chip"></div>
+
+<div class="scene darkcard" id="s-title">
+  <div class="wordmark"><span class="lock">🔒</span> flightrec</div>
+  <div class="tagline">a Slack agent with a tamper-evident black box</div>
+</div>
+
+<div class="scene" id="s-slack">
+  <div class="slack">
+    <div class="rail"><div class="ws">sh</div><div class="dot"></div><div class="dot"></div></div>
+    <div class="sidebar">
+      <h1>slack-hack</h1>
+      <div class="sect">Channels</div>
+      <div class="ch"># general</div>
+      <div class="ch active"># demo</div>
+      <div class="ch"># random</div>
+      <div class="sect">Apps</div>
+      <div class="ch">🔒 flightrec</div>
+    </div>
+    <div class="main">
+      <div class="chanhead"># demo <span>Privileged-action broker demo</span></div>
+      <div class="msgs" id="msgs"></div>
+      <div class="inputbar" id="inputbar">Message #demo</div>
+    </div>
+  </div>
+  <div class="modalveil" id="modalveil" style="display:none">
+    <div class="modal">
+      <h2>Request access</h2>
+      <div class="mf"><label>Grant access to</label><div class="inp" id="mf-target"><span class="ph">Select a user</span></div></div>
+      <div class="mf"><label>Resource</label><div class="inp" id="mf-resource"><span class="ph">e.g. prod-analytics</span></div></div>
+      <div class="mf"><label>Scope</label><div class="inp" id="mf-scope"><span class="ph">Select an option</span></div></div>
+      <div class="mf"><label>Duration</label><div class="inp" id="mf-duration"><span class="ph">Select an option</span></div></div>
+      <div class="mbtns"><div class="cancel">Cancel</div><div class="submit" id="mf-submit">Request</div></div>
+    </div>
+  </div>
+  <div class="termveil" id="termveil" style="display:none">
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>attacker@insider: sqlite3 data/audit.db</span></div>
+      <pre id="termpre"></pre>
+    </div>
+  </div>
+</div>
+
+<div class="scene" id="s-mcp">
+  <div class="split">
+    <div class="cd">
+      <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i>&nbsp;Claude Desktop</div>
+      <div class="body" id="cdbody"></div>
+    </div>
+    <div class="slackhalf"><div class="slack">
+      <div class="main">
+        <div class="chanhead"># demo <span>same black box, audited from Slack</span></div>
+        <div class="msgs" id="msgs2"></div>
+        <div class="inputbar">Message #demo</div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<div class="scene darkcard" id="s-close">
+  <div class="wordmark"><span class="lock">🔒</span> flightrec</div>
+  <div class="tagline">The model proposes. The gate disposes. The black box remembers everything.</div>
+  <div class="urlline">github.com/kitfunso/flightrec-slack</div>
+</div>
+
+<script src="artifacts.js"></script>
+<script>
+const A = window.ARTIFACTS;
+const $ = id => document.getElementById(id);
+const NAMES = { [A.grant.req.requester]: "Keith So", [A.grant.req.targetUser]: "Jane Osei" };
+const TS = "2:14 PM";
+
+/* ---------- driver hooks ---------- */
+window.frIntro = (big, sub) => {
+  $("introBig").innerHTML = big; $("introSub").textContent = sub ?? "";
+  $("intro").classList.toggle("hidden", big === "");
+};
+window.frCap = t => { $("cap").innerHTML = t; $("cap").classList.toggle("on", t !== ""); };
+window.frChip = t => { $("chip").textContent = t; $("chip").classList.toggle("on", t !== ""); };
+window.go = id => {
+  document.querySelectorAll(".scene").forEach(s => s.classList.remove("on"));
+  $("s-" + id).classList.add("on");
+};
+
+/* ---------- Slack message builders ---------- */
+function msg(avatar, name, isApp, bodyHtml, textLine) {
+  return `<div class="msg"><div class="avatar ${isApp ? "" : "user"}">${avatar}</div>
+    <div class="mbody"><div class="mhead"><b>${name}</b>${isApp ? '<span class="app">APP</span>' : ""}<span class="ts">${TS}</span></div>
+    ${textLine ? `<div class="mtext">${textLine}</div>` : ""}${bodyHtml ?? ""}</div></div>`;
+}
+const mention = id => `<span class="mention">@${NAMES[id] ?? id}</span>`;
+const dur = s => (s === 3600 ? "1 hour" : s === 86400 ? "24 hours" : s + "s");
+
+function decisionCard(d) {
+  const granted = d.res.outcome === "grant";
+  const attest = `🔒 audit verified OK · 6 events  ·  run ${d.res.runId}`;
+  return `<div class="card">
+    <div class="hdr">${granted ? "✅ Access granted" : "⛔ Access denied"}</div>
+    <div class="fields">
+      <div class="f"><label>Requester</label><div>${mention(d.req.requester)}</div></div>
+      <div class="f"><label>Target</label><div>${mention(d.req.targetUser)}</div></div>
+      <div class="f"><label>Resource</label><div><code class="ic">${d.req.resource}</code></div></div>
+      <div class="f"><label>Scope</label><div><code class="ic">${d.req.scope}</code></div></div>
+      <div class="f"><label>Duration</label><div>${dur(d.req.durationSeconds)}</div></div>
+      <div class="f"><label>LLM proposed</label><div>${d.res.llmProposed} <i style="color:#9d9ba3">(advisory)</i></div></div>
+    </div>
+    <div class="gateline"><b>Policy gate</b> ${d.res.reason}</div>
+    <div class="btnrow"><span class="grnbtn">📋 View audit</span></div>
+    <div class="divider"></div>
+    <div class="ctx">${attest}</div></div>`;
+}
+
+function auditCard(audit, runId, opts = {}) {
+  const ok = audit.intact;
+  const verdict = ok ? "chain intact" : `<b class="verdict-bad">BROKEN</b> · tamper at seq ${audit.firstBroken}`;
+  const status = ok
+    ? "Every recorded step is hash-linked and independently verifiable."
+    : "🚨 The recorded history was altered out-of-band; the hash chain no longer verifies. The black box caught it.";
+  return `<div class="card">
+    <div class="hdr">${ok ? '<span class="verdict-ok">🔒 AUDIT VERIFIED</span>' : '<span class="verdict-bad">🚨 INTEGRITY VIOLATION</span>'}</div>
+    <div class="fields">
+      <div class="f"><label>Run</label><div><code class="ic">${runId}</code></div></div>
+      <div class="f"><label>Verdict</label><div>${verdict}</div></div>
+      <div class="f"><label>Events</label><div>${audit.events}</div></div>
+      <div class="f"><label>Head hash</label><div><code class="ic">${audit.headHash.slice(0, 16)}…</code></div></div>
+    </div>
+    <div class="gateline">${status}</div>
+    ${opts.report ? `<div class="auditpre"><div class="inner" id="${opts.report}">${audit.markdown
+      .replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</div></div>` : ""}
+    </div>`;
+}
+
+/* ---------- scene setters ---------- */
+window.showMsgs = (...htmls) => { $("msgs").innerHTML = htmls.join(""); $("msgs").classList.remove("centered"); };
+window.userCmd = cmd => msg("🧑‍💻", "Keith So", false, "", `<span style="color:#1d9bd1;font-weight:600">${cmd}</span>`);
+
+window.sceneColdOpen = () => {
+  window.go("slack");
+  $("modalveil").style.display = "none"; $("termveil").style.display = "none";
+  window.showMsgs(msg("🔒", "flightrec", true, auditCard(A.tampered.audit, A.grant.res.runId), ""));
+  $("msgs").classList.add("centered");
+};
+window.sceneModal = () => {
+  window.go("slack");
+  window.showMsgs(window.userCmd("/grant"));
+  ["mf-target","mf-resource","mf-scope","mf-duration"].forEach(id => {
+    $(id).innerHTML = { "mf-target":'<span class="ph">Select a user</span>', "mf-resource":'<span class="ph">e.g. prod-analytics</span>',
+      "mf-scope":'<span class="ph">Select an option</span>', "mf-duration":'<span class="ph">Select an option</span>' }[id];
+  });
+  $("mf-submit").classList.remove("pressed");
+  $("modalveil").style.display = "flex";
+};
+window.modalFill = (id, html, typing) => { const el = $("mf-" + id); el.innerHTML = html; el.classList.toggle("typing", !!typing); };
+window.modalSubmit = () => { $("mf-submit").classList.add("pressed"); };
+window.sceneGrant = () => {
+  $("modalveil").style.display = "none";
+  window.showMsgs(window.userCmd("/grant"), msg("🔒", "flightrec", true, decisionCard(A.grant), ""));
+};
+window.sceneDeny = () => {
+  window.showMsgs(msg("🔒", "flightrec", true, decisionCard(A.deny), ""));
+};
+window.sceneAuditOk = () => {
+  window.showMsgs(msg("🔒", "flightrec", true, auditCard(A.grant.audit, A.grant.res.runId, { report: "rpt" }), ""));
+};
+window.scrollReport = px => { const el = $("rpt"); if (el) el.style.transform = `translateY(-${px}px)`; };
+
+const TERM_LINES = [
+  { t: "sqlite> ", d: 0 },
+  { t: "DROP TRIGGER events_no_update;", d: 45 },
+  { t: "\nsqlite> ", d: 0 },
+  { t: "UPDATE events\n   SET payload = json_insert(payload, '$._TAMPERED',\n       'scope secretly escalated to admin on prod-secrets after the fact')\n WHERE run_id = '" + A.grant.res.runId + "' AND seq = 4;", d: 22 },
+  { t: "\nsqlite> ", d: 0 },
+];
+window.sceneTamper = async () => {
+  $("termveil").style.display = "flex";
+  const pre = $("termpre"); pre.textContent = "";
+  for (const line of TERM_LINES) {
+    if (line.d === 0) { pre.textContent += line.t; continue; }
+    for (const ch of line.t) { pre.textContent += ch; await new Promise(r => setTimeout(r, line.d)); }
+  }
+};
+window.sceneBroken = () => {
+  $("termveil").style.display = "none";
+  window.showMsgs(window.userCmd("/audit"), msg("🔒", "flightrec", true, auditCard(A.tampered.audit, A.grant.res.runId), ""));
+};
+
+window.sceneMcp = () => {
+  window.go("mcp");
+  const rec = A.mcp.recorded;
+  $("cdbody").innerHTML = `
+    <div class="u">Push the cta-v5 model to prod, and record every step in the flightrec black box.</div>
+    <div class="a">Deploying now. Recording each step to the shared audit store via flightrec-mcp:</div>
+    <div class="tool"><b>flightrec_record</b> run_meta  →  seq ${rec[0].seq} · ${rec[0].hash.slice(0, 12)}…</div>
+    <div class="tool"><b>flightrec_record</b> tool_call deploy.push (pre/post)  →  seq ${rec[1].seq}, ${rec[2].seq}</div>
+    <div class="tool"><b>flightrec_record</b> decision "deployed"  →  seq ${rec[3].seq} · ${rec[3].hash.slice(0, 12)}…</div>
+    <div class="a">Done. Run <code style="font-family:Consolas,monospace">${A.mcp.runId}</code> is hash-chained in the same black box your Slack bot audits.</div>`;
+  $("msgs2").innerHTML =
+    `<div class="msg"><div class="avatar user">🧑‍💻</div><div class="mbody"><div class="mhead"><b>Keith So</b><span class="ts">${TS}</span></div>
+     <div class="mtext"><span style="color:#1d9bd1;font-weight:600">/audit ${A.mcp.runId}</span></div></div></div>` +
+    msg("🔒", "flightrec", true, auditCard(A.mcp.audit, A.mcp.runId), "");
+};
+
+/* boot: intro veil up if ?intro=1 */
+if (new URLSearchParams(location.search).get("intro") === "1") window.frIntro(" ", "");
+window.go("title");
+</script>
+</body>
+</html>
