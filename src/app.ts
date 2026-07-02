@@ -60,7 +60,7 @@ type StateValues = Record<
   >
 >;
 
-app.command("/grant", async ({ ack, body, client, logger }) => {
+app.command("/grant", async ({ ack, body, client, respond, logger }) => {
   await ack();
   try {
     await client.views.open({
@@ -117,16 +117,28 @@ app.command("/grant", async ({ ack, body, client, logger }) => {
     });
   } catch (error) {
     logger.error(error);
+    // Never fail silently in front of the requester (or a judge).
+    await respond({
+      response_type: "ephemeral",
+      text: "⚠️ Could not open the request form. Check that the broker is running, then try `/grant` again.",
+    });
   }
 });
 
 app.view("grant_modal", async ({ ack, body, view, logger }) => {
   await ack();
+  // Parse metadata outside the main try so the error path can still reach the
+  // command's response_url and tell the requester something went wrong.
+  let meta: { channel?: string; responseUrl?: string } = {};
   try {
-    const meta = JSON.parse(view.private_metadata.length > 0 ? view.private_metadata : "{}") as {
+    meta = JSON.parse(view.private_metadata.length > 0 ? view.private_metadata : "{}") as {
       channel?: string;
       responseUrl?: string;
     };
+  } catch {
+    meta = {};
+  }
+  try {
     const channel = meta.channel ?? "";
     const values = view.state.values as StateValues;
 
@@ -214,6 +226,24 @@ app.view("grant_modal", async ({ ack, body, view, logger }) => {
     }
   } catch (error) {
     logger.error(error);
+    // Deliver a visible failure instead of a silently closed modal. Honest
+    // wording: the black box keeps whatever steps completed before the error.
+    if (meta.responseUrl !== undefined && meta.responseUrl.length > 0) {
+      try {
+        await fetch(meta.responseUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            response_type: "ephemeral",
+            text:
+              "⚠️ flightrec hit an error handling this request. No result card is available. " +
+              "The audit trail records whatever steps completed; check the broker logs for the cause.",
+          }),
+        });
+      } catch (deliveryError) {
+        logger.error(deliveryError);
+      }
+    }
   }
 });
 
